@@ -19,79 +19,82 @@ import org.keycloak.services.validation.Validation;
 
 public class RegistrationProfileWithMailDomainCheck extends RegistrationProfile implements FormAction {
 
-   public static final String PROVIDER_ID = "registration-mail-check-action";
+    public static final String PROVIDER_ID = "registration-mail-check-action";
 
-   @Override
+    @Override
     public String getDisplayType() {
         return "Profile Validation with email domain check";
-   }
+    }
 
 
-   @Override
-   public String getId() {
-      return PROVIDER_ID;
-   }
+    @Override
+    public String getId() {
+        return PROVIDER_ID;
+    }
 
-   @Override
+    @Override
     public boolean isConfigurable() {
         return true;
-   }
+    }
 
 
-   @Override
-   public String getHelpText() {
-      return "Adds validation of domain emails for registration";
-   }
+    @Override
+    public String getHelpText() {
+        return "Adds validation of domain emails for registration";
+    }
 
-   private static final List<ProviderConfigProperty> CONFIG_PROPERTIES = new ArrayList<ProviderConfigProperty>();
+    private static final List<ProviderConfigProperty> CONFIG_PROPERTIES = new ArrayList<ProviderConfigProperty>();
 
-   static {
-      ProviderConfigProperty property;
-      property = new ProviderConfigProperty();
-      property.setName("validDomains");
-      property.setLabel("Valid domain for emails");
-      property.setType(ProviderConfigProperty.MULTIVALUED_STRING_TYPE);
-      property.setHelpText("List mail domains authorized to register");
-      CONFIG_PROPERTIES.add(property);
-   }
+    static {
+        ProviderConfigProperty property;
+        property = new ProviderConfigProperty();
+        property.setName("validDomains");
+        property.setLabel("Valid domain for emails");
+        property.setType(ProviderConfigProperty.MULTIVALUED_STRING_TYPE);
+        property.setHelpText("List mail domains authorized to register");
+        CONFIG_PROPERTIES.add(property);
+    }
 
-   @Override
-   public List<ProviderConfigProperty> getConfigProperties() {
-      return CONFIG_PROPERTIES;
-   }
+    @Override
+    public List<ProviderConfigProperty> getConfigProperties() {
+        return CONFIG_PROPERTIES;
+    }
 
-   @Override
-   public void validate(ValidationContext context) {
-      MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
+    @Override
+    public void validate(ValidationContext context) {
+        MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
+        String eventError = Errors.INVALID_REGISTRATION;
 
-      List<FormMessage> errors = new ArrayList<>();
-      String email = formData.getFirst(Validation.FIELD_EMAIL);
+        List<FormMessage> errors = new ArrayList<>();
+        String email = formData.getFirst(Validation.FIELD_EMAIL);
+        if (Validation.isBlank(email)) {
+            errors.add(new FormMessage(Validation.FIELD_EMAIL, Messages.INVALID_EMAIL));
+        } else {
+            boolean emailDomainValid = false;
+            AuthenticatorConfigModel mailDomainConfig = context.getAuthenticatorConfig();
 
-      boolean emailDomainValid = false;
-      AuthenticatorConfigModel mailDomainConfig = context.getAuthenticatorConfig();
-      String eventError = Errors.INVALID_REGISTRATION;
+            String[] domains = mailDomainConfig.getConfig().getOrDefault("validDomains", "exemple.org").split("##");
+            for (String domain : domains) {
+                if (email.endsWith(domain)) {
+                    emailDomainValid = true;
+                    break;
+                }
+            }
+            if (!emailDomainValid) {
+                System.out.println("here");
+                context.getEvent().detail(Details.EMAIL, email);
+                errors.add(new FormMessage(RegistrationPage.FIELD_EMAIL, Messages.INVALID_EMAIL));
+            }
+        }
+        if (errors.size() > 0) {
+            context.error(eventError);
+            context.validationError(formData, errors);
+            return;
 
-      String[] domains = mailDomainConfig.getConfig().getOrDefault("validDomains","exemple.org").split("##");
-      for (String domain : domains) {
-         if (email.endsWith(domain)) {
-            emailDomainValid = true;
-            break;
-         }
-      }
-      if (!emailDomainValid) {
-         System.out.println("here");
-         context.getEvent().detail(Details.EMAIL, email);
-         errors.add(new FormMessage(RegistrationPage.FIELD_EMAIL, Messages.INVALID_EMAIL));
-      }
-      if (errors.size() > 0) {
-         context.error(eventError);
-         context.validationError(formData, errors);
-         return;
+        } else {
+            context.success();
+        }
 
-      } else {
-         context.success();
-      }
-
-   }
+    }
 
 }
